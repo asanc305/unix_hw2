@@ -11,8 +11,9 @@ int main() {
   array[0] = "./sleep";
   array[1] = "20";
   array[2] = "10";
-  array[3] = NULL;
+  array[3] = '\0';
+  printf("%s\n", array[3]);
   int err = execv("./sleep", array);
-  printf("%i\n", err);
+  
 }
 

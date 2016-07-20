@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #include "elcapo.h"
 
@@ -93,6 +94,7 @@ int main(int argc, char **argv) {
   char *token;
   char argument[20];
   int process_count, arg_count;
+  char delimit[] = " \t\r\n\v\f";	
 
 // -- Read configuration file
   config = fopen(options.config_file, "r");
@@ -108,29 +110,26 @@ int main(int argc, char **argv) {
     fgets(line, 260, config);
 
     if (strlen(line) > 0) {
-      token = strtok(line, " ");
+      token = strtok(line, delimit);
       if (*token == 'R')
         process[process_count].tries = 0;
       else
         process[process_count].tries = -1;
 
-      token = strtok(NULL, " ");
+      token = strtok(NULL, delimit);
       strncpy(process[process_count].path, token, MAX_PATH_LENGTH-1);
 
       process[process_count].args[arg_count] = malloc(strlen(token)+1);
       strcpy(process[process_count].args[arg_count], token);
       arg_count++;
 
-      while ((token = strtok(NULL, " ")) != NULL) {
-        if (token[0] == '\n')
-          printf("dfd\n");
+      while ((token = strtok(NULL, delimit)) != NULL) {
         process[process_count].args[arg_count] = malloc(strlen(token)+1);
         strcpy(process[process_count].args[arg_count], token);
         arg_count++;
-        if (token[strlen(token)-1] == '\n')
-          printf("d: %s %lu\n", token, strlen(token));
       }
-
+      //printf("arg_c: %i path: %s\n", arg_count, process[process_count].path);
+      //process[process_count].args[arg_count] = malloc(1);
       process[process_count].args[arg_count] = NULL;
       arg_count = 0; 
       process_count++;     
@@ -152,7 +151,9 @@ int main(int argc, char **argv) {
   for (i=0; i<process_count; i++) {
     id = fork();
     if (id == 0) {
-      int e = execv(process[process_count].path, process[process_count].args);
+      int e = execv(process[i].path, process[i].args);
+      if (e==-1)
+        printf("path: %s\n", strerror(errno));
       //printf("child %s %s %s %i\n", process[i].args[0], process[i].args[1], process[i].args[2],  e);
       _exit(0);
     }
