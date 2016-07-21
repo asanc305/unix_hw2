@@ -139,10 +139,29 @@ int main(int argc, char **argv) {
 
   
 
-  
-
   // -- If daemonized, create session, process group, and go to background
   //   -- Then close file descriptors and redirect stdout / stderr to /dev/null or log file
+  if (options.daemonize) {
+    pid_t forid = fork();
+    pid_t sessionId;
+
+    if (!child)
+      _exit(0);
+
+    sessionId = setsid();
+    
+    fclose(stdin);
+    fclose(stdout);
+    fclose(stderr);
+    fclose(config);
+
+    freopen ("myfile.txt","w",stderr);
+    freopen ("myfile.txt","w",stdout);
+  }
+
+
+
+
 
 // -- Start child processes
   int i;
@@ -154,11 +173,11 @@ int main(int argc, char **argv) {
       int e = execv(process[i].path, process[i].args);
       if (e==-1)
         printf("path: %s\n", strerror(errno));
-      //printf("child %s %s %s %i\n", process[i].args[0], process[i].args[1], process[i].args[2],  e);
       _exit(0);
     }
     else 
-      process[process_count].pid = id;  
+      process[i].pid = id;
+    printf("|Started|: %s pid: %i\n", process[i].path, process[i].pid);  
   }  
 
   // -- Set up signal handlers for SIGHUP to show the number of running processes
@@ -167,12 +186,31 @@ int main(int argc, char **argv) {
   //   -- When a process terminates, check if it needs to be restarted.
   //   -- If it does, check if the exit status is != 0 and if it already used max retries
   int status;
+  pid_t newId;
   while ( (id = wait(&status)) != -1) {
-    //id = wait(&status);
-    //printf("%i %i\n", id, WIFEXITED(status));
-    
-    if (id == -1)
-      break;
+    printf("|FINISHED| pid:%i exit:%i\n", id, WIFEXITED(status));
+    if (WIFEXITED(status))
+      continue;
+
+    for (i=0; i<process_count; i++) {
+      if (process[i].pid == id) {
+        if (process[i].tries == -1 || process[i].tries >= options.retries)
+          break;
+        else {
+          newId = fork();
+          if (newId == 0) {
+            int e = execv(process[i].path, process[i].args);
+            if (e==-1)
+              printf("path: %s\n", strerror(errno));
+            _exit(0);
+          }
+          else 
+            process[i].pid = newId;
+          printf("|REStarted|: %s pid: %i try: %i\n", process[i].path, process[i].pid, process[i].tries); 
+          process[i].tries++;
+        } 
+      }
+    }
   }
 
   // -- After waiting for all processes (including those that were restarted), terminate

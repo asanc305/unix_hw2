@@ -23,9 +23,9 @@ int main(int argc, char **argv) {
   int sleep_time = DEFAULT_SLEEP;
 
   signal(SIGINT, interrupt_handler);
-  printf("args %i\n", argc);
+ 
   if (argc > 1) {
-    sleep_time = atoi(argv[2]);
+    sleep_time = atoi(argv[1]);
     if (sleep_time <= 0) {
       sleep_time = DEFAULT_SLEEP;
     }
