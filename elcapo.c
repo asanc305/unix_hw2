@@ -9,9 +9,10 @@
 #include "elcapo.h"
 
 static char *program_name;
+int running_count;
 
 void print_usage_and_exit(int status) {
-
+  
   printf("Usage: %s -c config_file [-h] [-d] [-r retries]\n", program_name);
   printf("Where\n");
   printf("\t-c config_file\t\tSet elCAPO configuration file\n");
@@ -20,6 +21,10 @@ void print_usage_and_exit(int status) {
   printf("\t-r retries\t\tRetry failed commands for `retries` times\n");
   printf("\t-l log_file\t\tUse log_file for stdout and stderr when running as daemon\n");
   exit(status);
+}
+
+void interrupt_handler(int signo) {
+  printf("Number of processes running: %i\n", running_count);
 }
 
 void parse_program_options(int argc, char **argv, struct program_options *options) {
@@ -96,11 +101,11 @@ int main(int argc, char **argv) {
   int process_count, arg_count;
   char delimit[] = " \t\r\n\v\f";	
 
-// -- Read configuration file
+  // -- Read configuration file
   config = fopen(options.config_file, "r");
   if (config == NULL) {
     printf("Error opening file\n");
-    exit(2);
+    exit(-1);
   }
 
   process_count = 0;
@@ -128,8 +133,7 @@ int main(int argc, char **argv) {
         strcpy(process[process_count].args[arg_count], token);
         arg_count++;
       }
-      //printf("arg_c: %i path: %s\n", arg_count, process[process_count].path);
-      //process[process_count].args[arg_count] = malloc(1);
+
       process[process_count].args[arg_count] = NULL;
       arg_count = 0; 
       process_count++;     
@@ -142,31 +146,33 @@ int main(int argc, char **argv) {
   // -- If daemonized, create session, process group, and go to background
   //   -- Then close file descriptors and redirect stdout / stderr to /dev/null or log file
   if (options.daemonize) {
-    pid_t forid = fork();
-    pid_t sessionId;
+    pid_t child_id, session_id;
 
-    if (!child)
+    child_id = fork();
+    if (child_id != 0) 
       _exit(0);
-
-    sessionId = setsid();
+     
+    session_id = setsid();
     
     fclose(stdin);
     fclose(stdout);
     fclose(stderr);
     fclose(config);
 
-    freopen ("myfile.txt","w",stderr);
-    freopen ("myfile.txt","w",stdout);
+    if (strlen(options.log_file) == 0) {
+      freopen("/dev/null","w",stderr);
+      freopen("/dev/null","w",stdout);
+    }
+    else {
+      freopen(options.log_file, "w", stderr);
+      freopen(options.log_file, "w", stdout);
+    }
   }
 
-
-
-
-
-// -- Start child processes
+  // -- Start child processes
   int i;
   pid_t id;
-  
+  running_count = 0;
   for (i=0; i<process_count; i++) {
     id = fork();
     if (id == 0) {
@@ -175,20 +181,24 @@ int main(int argc, char **argv) {
         printf("path: %s\n", strerror(errno));
       _exit(0);
     }
-    else 
-      process[i].pid = id;
+    
+    process[i].pid = id;
+    running_count++;
     printf("|Started|: %s pid: %i\n", process[i].path, process[i].pid);  
-  }  
+  }
+  
 
   // -- Set up signal handlers for SIGHUP to show the number of running processes
-
-	// -- Wait for processes to terminate
+  signal(SIGHUP, interrupt_handler);
+  
+  // -- Wait for processes to terminate
   //   -- When a process terminates, check if it needs to be restarted.
   //   -- If it does, check if the exit status is != 0 and if it already used max retries
   int status;
   pid_t newId;
   while ( (id = wait(&status)) != -1) {
     printf("|FINISHED| pid:%i exit:%i\n", id, WIFEXITED(status));
+    running_count--;
     if (WIFEXITED(status))
       continue;
 
@@ -204,8 +214,9 @@ int main(int argc, char **argv) {
               printf("path: %s\n", strerror(errno));
             _exit(0);
           }
-          else 
-            process[i].pid = newId;
+          
+          process[i].pid = newId;
+	  running_count++;
           printf("|REStarted|: %s pid: %i try: %i\n", process[i].path, process[i].pid, process[i].tries); 
           process[i].tries++;
         } 
