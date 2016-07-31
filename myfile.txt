@@ -1,4 +1,0 @@
-About to sleep for 60 seconds
-Sleep period: 1
-Sleep period: 2
-Sleep period: 3

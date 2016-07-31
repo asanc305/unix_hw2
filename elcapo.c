@@ -184,7 +184,6 @@ int main(int argc, char **argv) {
     
     process[i].pid = id;
     running_count++;
-    printf("|Started|: %s pid: %i\n", process[i].path, process[i].pid);  
   }
   
 
@@ -197,7 +196,6 @@ int main(int argc, char **argv) {
   int status;
   pid_t newId;
   while ( (id = wait(&status)) != -1) {
-    printf("|FINISHED| pid:%i exit:%i\n", id, WIFEXITED(status));
     running_count--;
     if (WIFEXITED(status))
       continue;
@@ -216,8 +214,7 @@ int main(int argc, char **argv) {
           }
           
           process[i].pid = newId;
-	  running_count++;
-          printf("|REStarted|: %s pid: %i try: %i\n", process[i].path, process[i].pid, process[i].tries); 
+	  			running_count++;
           process[i].tries++;
         } 
       }
